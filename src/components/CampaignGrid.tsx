@@ -22,7 +22,8 @@ const CampaignGrid = () => {
       currentQuantity: 78,
       participants: 45,
       daysLeft: 12,
-      productLink: 'https://alibaba.com/product/123'
+      productLink: 'https://alibaba.com/product/123',
+      category: 'Électronique'
     },
     {
       id: '2',
@@ -34,7 +35,8 @@ const CampaignGrid = () => {
       currentQuantity: 156,
       participants: 89,
       daysLeft: 8,
-      productLink: 'https://alibaba.com/product/456'
+      productLink: 'https://alibaba.com/product/456',
+      category: 'Accessoires'
     },
     {
       id: '3',
@@ -46,7 +48,8 @@ const CampaignGrid = () => {
       currentQuantity: 203,
       participants: 127,
       daysLeft: 5,
-      productLink: 'https://alibaba.com/product/789'
+      productLink: 'https://alibaba.com/product/789',
+      category: 'Électronique'
     },
     {
       id: '4',
@@ -58,7 +61,8 @@ const CampaignGrid = () => {
       currentQuantity: 45,
       participants: 28,
       daysLeft: 15,
-      productLink: 'https://alibaba.com/product/101'
+      productLink: 'https://alibaba.com/product/101',
+      category: 'Maison'
     },
     {
       id: '5',
@@ -70,7 +74,8 @@ const CampaignGrid = () => {
       currentQuantity: 67,
       participants: 41,
       daysLeft: 20,
-      productLink: 'https://alibaba.com/product/112'
+      productLink: 'https://alibaba.com/product/112',
+      category: 'Mode'
     },
     {
       id: '6',
@@ -82,7 +87,8 @@ const CampaignGrid = () => {
       currentQuantity: 189,
       participants: 156,
       daysLeft: 7,
-      productLink: 'https://alibaba.com/product/131'
+      productLink: 'https://alibaba.com/product/131',
+      category: 'Gaming'
     }
   ];
 
@@ -134,7 +140,15 @@ const CampaignGrid = () => {
             {filteredCampaigns.map((campaign) => (
               <CampaignCard
                 key={campaign.id}
-                {...campaign}
+                id={campaign.id}
+                title={campaign.title}
+                description={campaign.description}
+                image={campaign.image}
+                price={campaign.unitPrice}
+                moq={campaign.moq}
+                currentParticipants={campaign.participants}
+                progress={(campaign.currentQuantity / campaign.moq) * 100}
+                category={campaign.category}
               />
             ))}
           </div>
