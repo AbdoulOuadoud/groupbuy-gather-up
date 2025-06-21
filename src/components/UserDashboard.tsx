@@ -1,143 +1,183 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, ExternalLink, Users, Target } from 'lucide-react';
-
-// Types temporaires (à remplacer par ceux de Supabase)
-interface Campaign {
-  id: string;
-  title: string;
-  description: string;
-  imageUrl?: string;
-  unitPrice: number;
-  moq: number;
-  currentQuantity: number;
-  myQuantity?: number;
-  status: 'active' | 'completed' | 'cancelled';
-  createdAt: string;
-}
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Plus, ExternalLink, Users, Target, Package, TrendingUp, Loader2 } from 'lucide-react';
+import { useGetUserCampaignsQuery } from '@/store/campaignsApi';
+import { useGetUserParticipationsQuery } from '@/store/participationsApi';
+import { useAuth } from '@/contexts/AuthContext';
+import { Campaign } from '@/types/database';
+import { Link } from 'react-router-dom';
 
 const UserDashboard = () => {
-  // Données mockées - à remplacer par les vraies données Supabase
-  const myCampaigns: Campaign[] = [
-    {
-      id: '1',
-      title: 'Écouteurs Bluetooth Premium',
-      description: 'Écouteurs sans fil haute qualité',
-      unitPrice: 25.50,
-      moq: 100,
-      currentQuantity: 75,
-      status: 'active',
-      createdAt: '2024-01-15'
-    }
-  ];
+  const { user } = useAuth();
+  const { data: userCampaigns, isLoading: campaignsLoading, error: campaignsError } = useGetUserCampaignsQuery(user?.id || '', {
+    skip: !user?.id
+  });
+  const { data: userParticipations, isLoading: participationsLoading, error: participationsError } = useGetUserParticipationsQuery(user?.id || '', {
+    skip: !user?.id
+  });
 
-  const joinedCampaigns: Campaign[] = [
-    {
-      id: '2',
-      title: 'Powerbank 20000mAh',
-      description: 'Batterie externe rapide',
-      unitPrice: 15.00,
-      moq: 200,
-      currentQuantity: 180,
-      myQuantity: 3,
-      status: 'active',
-      createdAt: '2024-01-10'
-    }
-  ];
+  const isLoading = campaignsLoading || participationsLoading;
+  const error = campaignsError || participationsError;
 
-  const getStatusBadge = (status: string, currentQuantity: number, moq: number) => {
-    if (status === 'completed') {
-      return <Badge className="bg-green-100 text-green-800">Terminée</Badge>;
-    }
-    if (status === 'cancelled') {
-      return <Badge variant="destructive">Annulée</Badge>;
-    }
-    if (currentQuantity >= moq) {
-      return <Badge className="bg-blue-100 text-blue-800">Objectif atteint</Badge>;
-    }
-    return <Badge className="bg-orange-100 text-orange-800">En cours</Badge>;
-  };
+  // Données adaptées pour la compatibilité avec l'ancien format
+  const adaptedUserCampaigns = userCampaigns && userParticipations ? {
+    created: userCampaigns,
+    participated: userParticipations.map(p => ({
+      ...p.campaigns,
+      user_quantity: p.quantity,
+    }))
+  } : null;
 
-  const CampaignCard = ({ campaign, showMyQuantity = false }: { campaign: Campaign; showMyQuantity?: boolean }) => (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start mb-3">
-          <h3 className="font-semibold text-lg">{campaign.title}</h3>
-          {getStatusBadge(campaign.status, campaign.currentQuantity, campaign.moq)}
+  if (!user) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Alert>
+          <AlertDescription>
+            Vous devez être connecté pour accéder à votre dashboard.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="space-y-6">
+          <Skeleton className="h-8 w-64" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+          </div>
+          <Skeleton className="h-96" />
         </div>
-        
-        <p className="text-muted-foreground text-sm mb-4 line-clamp-2">
-          {campaign.description}
-        </p>
+      </div>
+    );
+  }
 
-        <div className="space-y-2 mb-4">
-          <div className="flex justify-between text-sm">
-            <span>Prix unitaire:</span>
-            <span className="font-medium">{campaign.unitPrice}€</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span>Progression:</span>
-            <span className="font-medium">{campaign.currentQuantity} / {campaign.moq}</span>
-          </div>
-          {showMyQuantity && campaign.myQuantity && (
-            <div className="flex justify-between text-sm">
-              <span>Ma quantité:</span>
-              <span className="font-medium text-primary">{campaign.myQuantity} unités</span>
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Alert variant="destructive">
+          <AlertDescription>
+            Erreur lors du chargement de vos données. Veuillez réessayer plus tard.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  const myCampaigns = adaptedUserCampaigns?.created || [];
+  const joinedCampaigns = adaptedUserCampaigns?.participated || [];
+
+  // Statistiques
+  const totalCampaignsCreated = myCampaigns.length;
+  const totalCampaignsJoined = joinedCampaigns.length;
+  const completedCampaigns = myCampaigns.filter(c => c.status === 'completed').length;
+
+  const CampaignCard = ({ campaign, isOwner = false, userQuantity }: { 
+    campaign: Campaign & { user_quantity?: number }, 
+    isOwner?: boolean,
+    userQuantity?: number 
+  }) => {
+    // Pour les nouvelles campagnes, on a besoin de calculer la progression à partir des participations
+    // Dans ce contexte simplifié, on utilisera le statut pour déterminer si c'est complété
+    const isCompleted = campaign.status === 'completed';
+
+    return (
+      <Card className="hover:shadow-lg transition-shadow">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <CardTitle className="text-lg mb-2">{campaign.product_name}</CardTitle>
+              <p className="text-sm text-muted-foreground line-clamp-2">
+                {campaign.description}
+              </p>
             </div>
-          )}
-        </div>
+            <Badge variant={isCompleted ? "default" : "secondary"}>
+              {isCompleted ? "Complétée" : campaign.status === 'open' ? "Active" : "Annulée"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Prix unitaire:</span>
+                <p className="font-semibold">{campaign.unit_price}€</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">MOQ:</span>
+                <p className="font-semibold">{campaign.moq} unités</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Statut:</span>
+                <p className="font-semibold">{campaign.status === 'open' ? 'Ouverte' : campaign.status === 'completed' ? 'Complétée' : 'Annulée'}</p>
+              </div>
+              {!isOwner && userQuantity && (
+                <div>
+                  <span className="text-muted-foreground">Ma quantité:</span>
+                  <p className="font-semibold">{userQuantity} unités</p>
+                </div>
+              )}
+            </div>
 
-        <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
-          <div 
-            className="bg-primary rounded-full h-2 transition-all duration-300"
-            style={{ width: `${Math.min((campaign.currentQuantity / campaign.moq) * 100, 100)}%` }}
-          />
-        </div>
-
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1">
-            <ExternalLink className="h-4 w-4 mr-1" />
-            Voir détails
-          </Button>
-          {showMyQuantity && campaign.myQuantity && (
-            <Button variant="outline" size="sm">
-              <Plus className="h-4 w-4 mr-1" />
-              Ajouter
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => window.open(campaign.product_link, '_blank')}
+                disabled={!campaign.product_link}
+              >
+                <ExternalLink className="h-4 w-4 mr-1" />
+                Voir produit
+              </Button>
+              {isOwner && (
+                <Button variant="outline" size="sm">
+                  <Users className="h-4 w-4 mr-1" />
+                  Participants
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
+      <div className="space-y-8">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Mon Dashboard</h1>
+            <h1 className="text-3xl font-bold">Mon Dashboard</h1>
             <p className="text-muted-foreground">
-              Gérez vos campagnes d'achat groupé
+              Gérez vos campagnes et suivez vos participations
             </p>
           </div>
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Nouvelle campagne
-          </Button>
+          <Link to="/create-campaign">
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Nouvelle campagne
+            </Button>
+          </Link>
         </div>
 
-        {/* Statistiques rapides */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {/* Statistiques */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center space-x-2">
-                <Target className="h-8 w-8 text-primary" />
+                <Package className="h-8 w-8 text-primary" />
                 <div>
-                  <p className="text-2xl font-bold">{myCampaigns.length}</p>
+                  <p className="text-2xl font-bold">{totalCampaignsCreated}</p>
                   <p className="text-sm text-muted-foreground">Campagnes créées</p>
                 </div>
               </div>
@@ -147,9 +187,9 @@ const UserDashboard = () => {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center space-x-2">
-                <Users className="h-8 w-8 text-primary" />
+                <Users className="h-8 w-8 text-blue-500" />
                 <div>
-                  <p className="text-2xl font-bold">{joinedCampaigns.length}</p>
+                  <p className="text-2xl font-bold">{totalCampaignsJoined}</p>
                   <p className="text-sm text-muted-foreground">Campagnes rejointes</p>
                 </div>
               </div>
@@ -159,71 +199,86 @@ const UserDashboard = () => {
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center space-x-2">
-                <div className="h-8 w-8 bg-primary rounded-full flex items-center justify-center">
-                  <span className="text-white font-bold">€</span>
-                </div>
+                <Target className="h-8 w-8 text-green-500" />
                 <div>
-                  <p className="text-2xl font-bold">
-                    {joinedCampaigns.reduce((sum, campaign) => 
-                      sum + (campaign.myQuantity || 0) * campaign.unitPrice, 0
-                    ).toFixed(2)}€
-                  </p>
-                  <p className="text-sm text-muted-foreground">Total engagé</p>
+                  <p className="text-2xl font-bold">{completedCampaigns}</p>
+                  <p className="text-sm text-muted-foreground">Objectifs atteints</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Onglets pour les campagnes */}
-        <Tabs defaultValue="created" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="created">Mes campagnes ({myCampaigns.length})</TabsTrigger>
-            <TabsTrigger value="joined">Campagnes rejointes ({joinedCampaigns.length})</TabsTrigger>
+        {/* Tabs */}
+        <Tabs defaultValue="created" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="created">
+              Mes campagnes ({totalCampaignsCreated})
+            </TabsTrigger>
+            <TabsTrigger value="joined">
+              Participations ({totalCampaignsJoined})
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="created" className="mt-6">
+          <TabsContent value="created" className="space-y-4">
             {myCampaigns.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {myCampaigns.map((campaign) => (
-                  <CampaignCard key={campaign.id} campaign={campaign} />
+                  <CampaignCard 
+                    key={campaign.id} 
+                    campaign={campaign} 
+                    isOwner={true}
+                  />
                 ))}
               </div>
             ) : (
               <Card>
                 <CardContent className="p-8 text-center">
-                  <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Aucune campagne créée</h3>
+                  <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">
+                    Aucune campagne créée
+                  </h3>
                   <p className="text-muted-foreground mb-4">
-                    Créez votre première campagne d'achat groupé
+                    Créez votre première campagne d'achat groupé pour commencer
                   </p>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Créer une campagne
-                  </Button>
+                  <Link to="/create-campaign">
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Créer une campagne
+                    </Button>
+                  </Link>
                 </CardContent>
               </Card>
             )}
           </TabsContent>
 
-          <TabsContent value="joined" className="mt-6">
+          <TabsContent value="joined" className="space-y-4">
             {joinedCampaigns.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {joinedCampaigns.map((campaign) => (
-                  <CampaignCard key={campaign.id} campaign={campaign} showMyQuantity />
+                  <CampaignCard 
+                    key={campaign.id} 
+                    campaign={campaign}
+                    userQuantity={campaign.user_quantity}
+                  />
                 ))}
               </div>
             ) : (
               <Card>
                 <CardContent className="p-8 text-center">
                   <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Aucune participation</h3>
+                  <h3 className="text-lg font-semibold mb-2">
+                    Aucune participation
+                  </h3>
                   <p className="text-muted-foreground mb-4">
-                    Rejoignez des campagnes d'achat groupé
+                    Rejoignez des campagnes d'achat groupé pour économiser
                   </p>
-                  <Button variant="outline">
-                    Parcourir les campagnes
-                  </Button>
+                  <Link to="/">
+                    <Button>
+                      <TrendingUp className="h-4 w-4 mr-2" />
+                      Découvrir les campagnes
+                    </Button>
+                  </Link>
                 </CardContent>
               </Card>
             )}

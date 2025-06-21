@@ -1,101 +1,64 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Filter, SlidersHorizontal } from 'lucide-react';
+import { Search, Filter, SlidersHorizontal, Loader2 } from 'lucide-react';
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import CampaignCard from './CampaignCard';
+import { useGetCampaignsQuery } from '@/store/campaignsApi';
 
 const CampaignGrid = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('popular');
+  
+  const { data: campaigns, isLoading, error } = useGetCampaignsQuery();
 
-  // Mock data pour les campagnes
-  const campaigns = [
-    {
-      id: '1',
-      title: 'Écouteurs Bluetooth Sans Fil Premium',
-      description: 'Écouteurs haute qualité avec réduction de bruit active, parfaits pour le sport et les déplacements.',
-      image: 'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=400&h=300&fit=crop',
-      unitPrice: 25.99,
-      moq: 100,
-      currentQuantity: 78,
-      participants: 45,
-      daysLeft: 12,
-      productLink: 'https://alibaba.com/product/123',
-      category: 'Électronique'
-    },
-    {
-      id: '2',
-      title: 'Support Téléphone Ajustable Bureau',
-      description: 'Support ergonomique universel pour smartphone et tablette, rotation 360° et hauteur réglable.',
-      image: 'https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=400&h=300&fit=crop',
-      unitPrice: 12.50,
-      moq: 200,
-      currentQuantity: 156,
-      participants: 89,
-      daysLeft: 8,
-      productLink: 'https://alibaba.com/product/456',
-      category: 'Accessoires'
-    },
-    {
-      id: '3',
-      title: 'Chargeur Rapide USB-C 65W',
-      description: 'Chargeur universel compact avec technologie de charge rapide pour ordinateurs portables et smartphones.',
-      image: 'https://images.unsplash.com/photo-1583394838336-acd977736f90?w=400&h=300&fit=crop',
-      unitPrice: 18.75,
-      moq: 150,
-      currentQuantity: 203,
-      participants: 127,
-      daysLeft: 5,
-      productLink: 'https://alibaba.com/product/789',
-      category: 'Électronique'
-    },
-    {
-      id: '4',
-      title: 'Lampe LED Bureau Rechargeable',
-      description: 'Lampe de bureau moderne avec 3 modes d\'éclairage, batterie intégrée et port USB pour charger.',
-      image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=300&fit=crop',
-      unitPrice: 32.99,
-      moq: 80,
-      currentQuantity: 45,
-      participants: 28,
-      daysLeft: 15,
-      productLink: 'https://alibaba.com/product/101',
-      category: 'Maison'
-    },
-    {
-      id: '5',
-      title: 'Sac à Dos Ordinateur Portable',
-      description: 'Sac à dos professionnel imperméable avec compartiment laptop 15.6", port USB et design anti-vol.',
-      image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&h=300&fit=crop',
-      unitPrice: 28.50,
-      moq: 120,
-      currentQuantity: 67,
-      participants: 41,
-      daysLeft: 20,
-      productLink: 'https://alibaba.com/product/112',
-      category: 'Mode'
-    },
-    {
-      id: '6',
-      title: 'Tapis de Souris Gaming XXL',
-      description: 'Tapis de souris grande taille pour gaming, surface lisse, base antidérapante et bordures cousues.',
-      image: 'https://images.unsplash.com/photo-1535223289827-42f1e9919769?w=400&h=300&fit=crop',
-      unitPrice: 15.99,
-      moq: 300,
-      currentQuantity: 189,
-      participants: 156,
-      daysLeft: 7,
-      productLink: 'https://alibaba.com/product/131',
-      category: 'Gaming'
+  // Filtrage et tri des campagnes
+  const filteredAndSortedCampaigns = React.useMemo(() => {
+    if (!campaigns) return [];
+    
+    let filtered = campaigns.filter(campaign =>
+      campaign.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (campaign.description && campaign.description.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
+    switch (sortBy) {
+      case 'newest':
+        filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        break;
+      case 'price_low':
+        filtered.sort((a, b) => a.unit_price - b.unit_price);
+        break;
+      case 'price_high':
+        filtered.sort((a, b) => b.unit_price - a.unit_price);
+        break;
+      case 'progress':
+        filtered.sort((a, b) => {
+          const progressA = (a.total_quantity || 0) / a.moq;
+          const progressB = (b.total_quantity || 0) / b.moq;
+          return progressB - progressA;
+        });
+        break;
+      default: // popular
+        filtered.sort((a, b) => (b.total_quantity || 0) - (a.total_quantity || 0));
     }
-  ];
 
-  const filteredCampaigns = campaigns.filter(campaign =>
-    campaign.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    campaign.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+    return filtered;
+  }, [campaigns, searchTerm, sortBy]);
+
+  if (error) {
+    return (
+      <section className="py-16 bg-muted">
+        <div className="container mx-auto px-4">
+          <Alert variant="destructive" className="max-w-2xl mx-auto">
+            <AlertDescription>
+              Erreur lors du chargement des campagnes. Veuillez réessayer plus tard.
+            </AlertDescription>
+          </Alert>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="py-16 bg-muted">
@@ -128,44 +91,47 @@ const CampaignGrid = () => {
               </SelectTrigger>
               <SelectContent className="bg-white">
                 <SelectItem value="popular">Plus populaire</SelectItem>
-                <SelectItem value="price-low">Prix croissant</SelectItem>
-                <SelectItem value="price-high">Prix décroissant</SelectItem>
-                <SelectItem value="ending-soon">Fin bientôt</SelectItem>
+                <SelectItem value="newest">Plus récent</SelectItem>
+                <SelectItem value="price_low">Prix croissant</SelectItem>
+                <SelectItem value="price_high">Prix décroissant</SelectItem>
                 <SelectItem value="progress">Progression</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredCampaigns.map((campaign) => (
-              <CampaignCard
-                key={campaign.id}
-                id={campaign.id}
-                title={campaign.title}
-                description={campaign.description}
-                image={campaign.image}
-                price={campaign.unitPrice}
-                moq={campaign.moq}
-                currentParticipants={campaign.participants}
-                progress={(campaign.currentQuantity / campaign.moq) * 100}
-                category={campaign.category}
-              />
-            ))}
-          </div>
-
-          {filteredCampaigns.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground text-lg">
-                Aucune campagne trouvée pour "{searchTerm}"
-              </p>
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <span className="ml-2">Chargement des campagnes...</span>
             </div>
-          )}
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredAndSortedCampaigns.map((campaign) => (
+                  <CampaignCard
+                    key={campaign.id}
+                    campaign={campaign}
+                  />
+                ))}
+              </div>
 
-          <div className="text-center mt-12">
-            <Button variant="outline" className="px-8 py-3">
-              Voir plus de campagnes
-            </Button>
-          </div>
+              {filteredAndSortedCampaigns.length === 0 && !isLoading && (
+                <div className="text-center py-12">
+                  <p className="text-muted-foreground text-lg">
+                    {searchTerm 
+                      ? `Aucune campagne trouvée pour "${searchTerm}"`
+                      : "Aucune campagne active pour le moment."
+                    }
+                  </p>
+                  {!searchTerm && (
+                    <p className="text-muted-foreground mt-2">
+                      Soyez le premier à créer une campagne !
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     </section>
